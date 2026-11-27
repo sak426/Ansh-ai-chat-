@@ -1,0 +1,156 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Registered student or owner profile with usage stats and admin block flag.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Firebase Auth UID matching document ID." },
+        "displayName": { "type": "string", "description": "User display name from Google profile." },
+        "email": { "type": "string", "description": "User email address." },
+        "photoUrl": { "type": "string", "description": "Optional Google profile avatar URL." },
+        "blocked": { "type": "boolean", "description": "Whether the user is blocked by the admin." },
+        "chatCount": { "type": "integer", "description": "Total AI study questions asked." },
+        "imageGenCount": { "type": "integer", "description": "Total AI educational images generated." },
+        "noteCount": { "type": "integer", "description": "Total study notes created." },
+        "dailyChatCount": { "type": "integer", "description": "AI study questions asked on usageDate." },
+        "dailyImageCount": { "type": "integer", "description": "AI images generated on usageDate." },
+        "usageDate": { "type": "string", "description": "Local calendar day YYYY-MM-DD for automatic midnight reset." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp of first sign-in (FieldValue.serverTimestamp())." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp of last update (FieldValue.serverTimestamp())." },
+        "lastActiveAt": { "type": "string", "format": "date-time", "description": "Server timestamp of last activity (FieldValue.serverTimestamp())." }
+      },
+      "required": ["userId", "displayName", "email", "blocked", "chatCount", "imageGenCount", "noteCount", "createdAt", "updatedAt", "lastActiveAt"]
+    },
+    "ChatMessage": {
+      "title": "ChatMessage",
+      "description": "Single message turn in a student's AI study chat history.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Owner Firebase Auth UID." },
+        "role": { "type": "string", "enum": ["user", "model"], "description": "Speaker role." },
+        "text": { "type": "string", "description": "Message text content." },
+        "hasImage": { "type": "boolean", "description": "Whether the student attached a textbook/homework photo." },
+        "imagePreviewBase64": { "type": "string", "description": "Optional compressed thumbnail preview encoded in Base64." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp (FieldValue.serverTimestamp())." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp (FieldValue.serverTimestamp())." }
+      },
+      "required": ["userId", "role", "text", "hasImage", "createdAt", "updatedAt"]
+    },
+    "StudyNote": {
+      "title": "StudyNote",
+      "description": "Student study note with optional Gemini bullet-point summary.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Owner Firebase Auth UID." },
+        "title": { "type": "string", "description": "Title of the study note." },
+        "subject": { "type": "string", "description": "Subject tag such as Biology, Math, or History." },
+        "content": { "type": "string", "description": "Full study note text." },
+        "summary": { "type": "string", "description": "AI-generated bullet-point summary." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp (FieldValue.serverTimestamp())." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp (FieldValue.serverTimestamp())." }
+      },
+      "required": ["userId", "title", "subject", "content", "summary", "createdAt", "updatedAt"]
+    },
+    "StudyTask": {
+      "title": "StudyTask",
+      "description": "Study planner task for homework, exam dates, or daily study goals.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Owner Firebase Auth UID." },
+        "title": { "type": "string", "description": "Task title." },
+        "category": { "type": "string", "enum": ["HOMEWORK", "EXAM", "DAILY"], "description": "Planner category." },
+        "dueDateLabel": { "type": "string", "description": "Human-readable due date label." },
+        "priority": { "type": "string", "enum": ["LOW", "MEDIUM", "HIGH"], "description": "Priority level." },
+        "completed": { "type": "boolean", "description": "Completion state." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp (FieldValue.serverTimestamp())." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp (FieldValue.serverTimestamp())." }
+      },
+      "required": ["userId", "title", "category", "dueDateLabel", "priority", "completed", "createdAt", "updatedAt"]
+    },
+    "AppBranding": {
+      "title": "AppBranding",
+      "description": "Owner-managed app logo and promotional home banner displayed across students.",
+      "type": "object",
+      "properties": {
+        "appName": { "type": "string", "description": "Branded app display name." },
+        "logoBase64": { "type": "string", "description": "Compressed custom app logo image in Base64." },
+        "bannerBase64": { "type": "string", "description": "Compressed promotional banner image in Base64." },
+        "bannerTitle": { "type": "string", "description": "Promotional banner headline." },
+        "bannerSubtitle": { "type": "string", "description": "Promotional banner subtitle." },
+        "updatedBy": { "type": "string", "description": "Admin UID who updated branding." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp (FieldValue.serverTimestamp())." }
+      },
+      "required": ["appName", "logoBase64", "bannerBase64", "bannerTitle", "bannerSubtitle", "updatedBy", "updatedAt"]
+    },
+    "Announcement": {
+      "title": "Announcement",
+      "description": "Global announcement banner posted by the owner admin for all students.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "description": "Announcement headline." },
+        "message": { "type": "string", "description": "Announcement body text." },
+        "active": { "type": "boolean", "description": "Whether the banner is currently visible to students." },
+        "updatedBy": { "type": "string", "description": "Admin UID who posted the announcement." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp (FieldValue.serverTimestamp())." }
+      },
+      "required": ["title", "message", "active", "updatedBy", "updatedAt"]
+    },
+    "UsageLimits": {
+      "title": "UsageLimits",
+      "description": "Admin-configurable daily AI question and image generation limits.",
+      "type": "object",
+      "properties": {
+        "dailyChatLimit": { "type": "integer", "description": "Maximum AI study questions per student per day." },
+        "dailyImageLimit": { "type": "integer", "description": "Maximum AI images generated per student per day." },
+        "updatedBy": { "type": "string", "description": "Admin UID who updated daily limits." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp (FieldValue.serverTimestamp())." }
+      },
+      "required": ["dailyChatLimit", "dailyImageLimit", "updatedBy", "updatedAt"]
+    },
+    "AdminRecord": {
+      "title": "AdminRecord",
+      "description": "Optional admin registry entry for elevated privileges.",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string", "description": "Admin email address." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp (FieldValue.serverTimestamp())." }
+      },
+      "required": ["email", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Per-user student profile, usage metrics, and admin block status."
+    },
+    "/users/{userId}/chatMessages/{messageId}": {
+      "schema": { "$ref": "#/entities/ChatMessage" },
+      "description": "Per-user AI study assistant chat history."
+    },
+    "/users/{userId}/studyNotes/{noteId}": {
+      "schema": { "$ref": "#/entities/StudyNote" },
+      "description": "Per-user study notes and AI bullet summaries."
+    },
+    "/users/{userId}/studyTasks/{taskId}": {
+      "schema": { "$ref": "#/entities/StudyTask" },
+      "description": "Per-user study planner tasks for homework, exams, and daily goals."
+    },
+    "/appBranding/{brandingId}": {
+      "schema": { "$ref": "#/entities/AppBranding" },
+      "description": "Singleton app branding configuration (document ID: current)."
+    },
+    "/announcements/{announcementId}": {
+      "schema": { "$ref": "#/entities/Announcement" },
+      "description": "Singleton active student announcement banner (document ID: current)."
+    },
+    "/usageLimits/{limitId}": {
+      "schema": { "$ref": "#/entities/UsageLimits" },
+      "description": "Singleton admin-configurable daily AI usage limits (document ID: current)."
+    },
+    "/admins/{adminUid}": {
+      "schema": { "$ref": "#/entities/AdminRecord" },
+      "description": "Trusted admin allowlist documents."
+    }
+  }
+}

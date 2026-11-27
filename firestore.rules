@@ -1,0 +1,308 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global safety net: deny all reads and writes by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- GLOBAL PRIMITIVES ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        (request.auth.token.email == 'sakharepurva83@gmail.com' && request.auth.token.email_verified == true) ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function isNotBlocked(userId) {
+      return !exists(/databases/$(database)/documents/users/$(userId)) ||
+        get(/databases/$(database)/documents/users/$(userId)).data.blocked == false;
+    }
+
+    // --- VALIDATION BLUEPRINTS ---
+
+    function isValidUserProfile(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+        data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 100 &&
+        data.email is string && data.email.size() >= 3 && data.email.size() <= 200 &&
+        (!('photoUrl' in data) || data.photoUrl == null || (data.photoUrl is string && data.photoUrl.size() <= 1000)) &&
+        data.blocked is bool &&
+        data.chatCount is int && data.chatCount >= 0 && data.chatCount <= 1000000 &&
+        data.imageGenCount is int && data.imageGenCount >= 0 && data.imageGenCount <= 1000000 &&
+        data.noteCount is int && data.noteCount >= 0 && data.noteCount <= 1000000 &&
+        (!('dailyChatCount' in data) || (data.dailyChatCount is int && data.dailyChatCount >= 0 && data.dailyChatCount <= 10000)) &&
+        (!('dailyImageCount' in data) || (data.dailyImageCount is int && data.dailyImageCount >= 0 && data.dailyImageCount <= 10000)) &&
+        (!('usageDate' in data) || (data.usageDate is string && data.usageDate.size() <= 20)) &&
+        data.createdAt is timestamp && data.createdAt <= request.time &&
+        data.updatedAt is timestamp && data.updatedAt <= request.time &&
+        data.lastActiveAt is timestamp && data.lastActiveAt <= request.time;
+    }
+
+    function isValidChatMessage(data, userId) {
+      return data.userId is string && data.userId == userId &&
+        data.role in ['user', 'model'] &&
+        data.text is string && data.text.size() >= 1 && data.text.size() <= 20000 &&
+        data.hasImage is bool &&
+        (!('imagePreviewBase64' in data) || data.imagePreviewBase64 == null || (data.imagePreviewBase64 is string && data.imagePreviewBase64.size() <= 120000)) &&
+        data.createdAt is timestamp && data.createdAt <= request.time &&
+        data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidStudyNote(data, userId) {
+      return data.userId is string && data.userId == userId &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 150 &&
+        data.subject is string && data.subject.size() <= 60 &&
+        data.content is string && data.content.size() >= 1 && data.content.size() <= 25000 &&
+        data.summary is string && data.summary.size() <= 8000 &&
+        data.createdAt is timestamp && data.createdAt <= request.time &&
+        data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidStudyTask(data, userId) {
+      return data.userId is string && data.userId == userId &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 160 &&
+        data.category in ['HOMEWORK', 'EXAM', 'DAILY'] &&
+        data.dueDateLabel is string && data.dueDateLabel.size() <= 40 &&
+        data.priority in ['LOW', 'MEDIUM', 'HIGH'] &&
+        data.completed is bool &&
+        data.createdAt is timestamp && data.createdAt <= request.time &&
+        data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidAppBranding(data) {
+      return data.appName is string && data.appName.size() >= 1 && data.appName.size() <= 60 &&
+        data.logoBase64 is string && data.logoBase64.size() <= 250000 &&
+        data.bannerBase64 is string && data.bannerBase64.size() <= 450000 &&
+        data.bannerTitle is string && data.bannerTitle.size() <= 100 &&
+        data.bannerSubtitle is string && data.bannerSubtitle.size() <= 200 &&
+        data.updatedBy is string && data.updatedBy.size() >= 1 && data.updatedBy.size() <= 128 &&
+        data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidAnnouncement(data) {
+      return data.title is string && data.title.size() >= 1 && data.title.size() <= 100 &&
+        data.message is string && data.message.size() >= 1 && data.message.size() <= 600 &&
+        data.active is bool &&
+        data.updatedBy is string && data.updatedBy.size() >= 1 && data.updatedBy.size() <= 128 &&
+        data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidUsageLimits(data) {
+      return data.dailyChatLimit is int && data.dailyChatLimit >= 1 && data.dailyChatLimit <= 500 &&
+        data.dailyImageLimit is int && data.dailyImageLimit >= 1 && data.dailyImageLimit <= 100 &&
+        data.updatedBy is string && data.updatedBy.size() >= 1 && data.updatedBy.size() <= 128 &&
+        data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidAdminRecord(data) {
+      return data.email is string && data.email.size() >= 3 && data.email.size() <= 200 &&
+        data.createdAt is timestamp && data.createdAt <= request.time;
+    }
+
+    // --- USERS COLLECTION (PII ISOLATED TO OWNER OR ADMIN) ---
+    match /users/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && (request.auth.uid == userId || isAdmin());
+      allow list: if isAdmin();
+
+      allow create: if isOwner(userId) &&
+        isValidId(userId) &&
+        incoming().userId == request.auth.uid &&
+        incoming().blocked == false &&
+        incoming().chatCount == 0 &&
+        incoming().imageGenCount == 0 &&
+        incoming().noteCount == 0 &&
+        (!('dailyChatCount' in incoming()) || incoming().dailyChatCount == 0) &&
+        (!('dailyImageCount' in incoming()) || incoming().dailyImageCount == 0) &&
+        incoming().keys().hasAll(['userId', 'displayName', 'email', 'blocked', 'chatCount', 'imageGenCount', 'noteCount', 'createdAt', 'updatedAt', 'lastActiveAt']) &&
+        incoming().keys().hasOnly(['userId', 'displayName', 'email', 'photoUrl', 'blocked', 'chatCount', 'imageGenCount', 'noteCount', 'dailyChatCount', 'dailyImageCount', 'usageDate', 'createdAt', 'updatedAt', 'lastActiveAt']) &&
+        isValidUserProfile(incoming());
+
+      allow update: if isSignedIn() &&
+        isValidId(userId) &&
+        isValidUserProfile(incoming()) &&
+        incoming().userId == existing().userId &&
+        incoming().createdAt == existing().createdAt && (
+          // Action 1: Owner updates own profile metadata or usage counters while unblocked
+          (request.auth.uid == userId &&
+            existing().blocked == false &&
+            incoming().blocked == false &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'email', 'photoUrl', 'chatCount', 'imageGenCount', 'noteCount', 'dailyChatCount', 'dailyImageCount', 'usageDate', 'updatedAt', 'lastActiveAt'])) ||
+          // Action 2: Admin toggles blocked state for moderation
+          (isAdmin() &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['blocked', 'updatedAt']))
+        );
+
+      allow delete: if isAdmin() && isValidId(userId);
+
+      // --- CHAT HISTORY SUBCOLLECTION ---
+      match /chatMessages/{messageId} {
+        allow get: if isOwner(userId) && isValidId(messageId);
+        allow list: if isOwner(userId);
+
+        allow create: if isOwner(userId) &&
+          isValidId(messageId) &&
+          incoming().keys().hasAll(['userId', 'role', 'text', 'hasImage', 'createdAt', 'updatedAt']) &&
+          incoming().keys().hasOnly(['userId', 'role', 'text', 'hasImage', 'imagePreviewBase64', 'createdAt', 'updatedAt']) &&
+          isValidChatMessage(incoming(), userId) &&
+          isNotBlocked(userId);
+
+        allow update: if isOwner(userId) &&
+          isValidId(messageId) &&
+          isValidChatMessage(incoming(), userId) &&
+          incoming().userId == existing().userId &&
+          incoming().createdAt == existing().createdAt &&
+          isNotBlocked(userId) &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['text', 'updatedAt']);
+
+        allow delete: if isOwner(userId) && isValidId(messageId);
+      }
+
+      // --- STUDY NOTES SUBCOLLECTION ---
+      match /studyNotes/{noteId} {
+        allow get: if isOwner(userId) && isValidId(noteId);
+        allow list: if isOwner(userId);
+
+        allow create: if isOwner(userId) &&
+          isValidId(noteId) &&
+          incoming().keys().hasAll(['userId', 'title', 'subject', 'content', 'summary', 'createdAt', 'updatedAt']) &&
+          incoming().keys().hasOnly(['userId', 'title', 'subject', 'content', 'summary', 'createdAt', 'updatedAt']) &&
+          isValidStudyNote(incoming(), userId) &&
+          isNotBlocked(userId);
+
+        allow update: if isOwner(userId) &&
+          isValidId(noteId) &&
+          isValidStudyNote(incoming(), userId) &&
+          incoming().userId == existing().userId &&
+          incoming().createdAt == existing().createdAt &&
+          isNotBlocked(userId) && (
+            incoming().diff(existing()).affectedKeys().hasOnly(['title', 'subject', 'content', 'summary', 'updatedAt'])
+          );
+
+        allow delete: if isOwner(userId) && isValidId(noteId);
+      }
+
+      // --- STUDY PLANNER TASKS SUBCOLLECTION ---
+      match /studyTasks/{taskId} {
+        allow get: if isOwner(userId) && isValidId(taskId);
+        allow list: if isOwner(userId);
+
+        allow create: if isOwner(userId) &&
+          isValidId(taskId) &&
+          incoming().keys().hasAll(['userId', 'title', 'category', 'dueDateLabel', 'priority', 'completed', 'createdAt', 'updatedAt']) &&
+          incoming().keys().hasOnly(['userId', 'title', 'category', 'dueDateLabel', 'priority', 'completed', 'createdAt', 'updatedAt']) &&
+          isValidStudyTask(incoming(), userId) &&
+          isNotBlocked(userId);
+
+        allow update: if isOwner(userId) &&
+          isValidId(taskId) &&
+          isValidStudyTask(incoming(), userId) &&
+          incoming().userId == existing().userId &&
+          incoming().createdAt == existing().createdAt &&
+          isNotBlocked(userId) && (
+            // Action 1: Toggle completion status
+            incoming().diff(existing()).affectedKeys().hasOnly(['completed', 'updatedAt']) ||
+            // Action 2: Edit task details
+            incoming().diff(existing()).affectedKeys().hasOnly(['title', 'category', 'dueDateLabel', 'priority', 'completed', 'updatedAt'])
+          );
+
+        allow delete: if isOwner(userId) && isValidId(taskId);
+      }
+    }
+
+    // --- GLOBAL APP BRANDING (ADMIN WRITABLE, SIGNED-IN GET ONLY) ---
+    match /appBranding/{brandingId} {
+      allow get: if isSignedIn() && isValidId(brandingId);
+      allow list: if false;
+
+      allow create: if isAdmin() &&
+        isValidId(brandingId) &&
+        incoming().keys().hasAll(['appName', 'logoBase64', 'bannerBase64', 'bannerTitle', 'bannerSubtitle', 'updatedBy', 'updatedAt']) &&
+        incoming().keys().hasOnly(['appName', 'logoBase64', 'bannerBase64', 'bannerTitle', 'bannerSubtitle', 'updatedBy', 'updatedAt']) &&
+        isValidAppBranding(incoming());
+
+      allow update: if isAdmin() &&
+        isValidId(brandingId) &&
+        isValidAppBranding(incoming()) &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['appName', 'logoBase64', 'bannerBase64', 'bannerTitle', 'bannerSubtitle', 'updatedBy', 'updatedAt']);
+
+      allow delete: if isAdmin() && isValidId(brandingId);
+    }
+
+    // --- GLOBAL ANNOUNCEMENT BANNER (ADMIN WRITABLE, SIGNED-IN GET ONLY) ---
+    match /announcements/{announcementId} {
+      allow get: if isSignedIn() && isValidId(announcementId);
+      allow list: if false;
+
+      allow create: if isAdmin() &&
+        isValidId(announcementId) &&
+        incoming().keys().hasAll(['title', 'message', 'active', 'updatedBy', 'updatedAt']) &&
+        incoming().keys().hasOnly(['title', 'message', 'active', 'updatedBy', 'updatedAt']) &&
+        isValidAnnouncement(incoming());
+
+      allow update: if isAdmin() &&
+        isValidId(announcementId) &&
+        isValidAnnouncement(incoming()) &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['title', 'message', 'active', 'updatedBy', 'updatedAt']);
+
+      allow delete: if isAdmin() && isValidId(announcementId);
+    }
+
+    // --- GLOBAL DAILY USAGE LIMITS (ADMIN WRITABLE, SIGNED-IN GET ONLY) ---
+    match /usageLimits/{limitId} {
+      allow get: if isSignedIn() && isValidId(limitId);
+      allow list: if false;
+
+      allow create: if isAdmin() &&
+        isValidId(limitId) &&
+        incoming().keys().hasAll(['dailyChatLimit', 'dailyImageLimit', 'updatedBy', 'updatedAt']) &&
+        incoming().keys().hasOnly(['dailyChatLimit', 'dailyImageLimit', 'updatedBy', 'updatedAt']) &&
+        isValidUsageLimits(incoming());
+
+      allow update: if isAdmin() &&
+        isValidId(limitId) &&
+        isValidUsageLimits(incoming()) &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['dailyChatLimit', 'dailyImageLimit', 'updatedBy', 'updatedAt']);
+
+      allow delete: if isAdmin() && isValidId(limitId);
+    }
+
+    // --- ADMIN REGISTRY (STRICTLY ADMIN-ONLY) ---
+    match /admins/{adminUid} {
+      allow get: if isSignedIn() && isValidId(adminUid) && (request.auth.uid == adminUid || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isAdmin() &&
+        isValidId(adminUid) &&
+        incoming().keys().hasAll(['email', 'createdAt']) &&
+        incoming().keys().hasOnly(['email', 'createdAt']) &&
+        isValidAdminRecord(incoming());
+      allow update: if isAdmin() &&
+        isValidId(adminUid) &&
+        isValidAdminRecord(incoming()) &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['email']);
+      allow delete: if isAdmin() && isValidId(adminUid);
+    }
+  }
+}

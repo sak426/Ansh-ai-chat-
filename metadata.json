@@ -1,0 +1,6 @@
+{
+  "name": "Ansh AI Chat",
+  "description": "Ansh AI Chat — all-in-one AI student assistant with Gemini study chat, photo homework solver, AI image generator, daily usage limits, notes summarizer, study planner, and owner admin dashboard.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

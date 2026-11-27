@@ -1,0 +1,15 @@
+<resources>
+    <string name="app_name">Ansh AI Chat</string>
+    <string name="tagline">Your AI Study Companion</string>
+    <string name="sign_in_with_google">Continue with Google</string>
+    <string name="tab_chat">Chat</string>
+    <string name="tab_image_gen">Image Gen</string>
+    <string name="tab_workspace">Workspace</string>
+    <string name="tab_profile">Profile</string>
+    <string name="workspace_notes">Notes &amp; AI</string>
+    <string name="workspace_planner">Study Planner</string>
+    <string name="admin_dashboard_title">Owner Admin Panel</string>
+    <string name="account_blocked_title">Account Access Suspended</string>
+    <string name="account_blocked_body">Your access to Ansh AI Chat has been temporarily restricted by the administrator. Contact support if you believe this is a mistake.</string>
+    <string name="sign_out">Sign Out</string>
+</resources>
